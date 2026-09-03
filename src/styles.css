@@ -48,11 +48,16 @@ a { color: inherit; }
 .app-shell { position: relative; display: flex; min-height: 100vh; flex-direction: column; overflow: hidden; padding: 24px; }
 .site-header { position: relative; z-index: 1; width: min(100%, 1200px); margin: 0 auto; }
 .site-header__top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
 .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 15px; font-weight: 600; letter-spacing: -0.16px; text-decoration: none; }
 .brand__icon { display: block; flex: 0 0 auto; width: 32px; height: 32px; object-fit: contain; }
 .icon-button { display: grid; width: 40px; height: 40px; place-items: center; border: 0; border-radius: 4px; color: var(--ink); background: transparent; }
 .icon-button svg { width: 20px; height: 20px; }
 .icon-button:hover { background: var(--surface-subtle); }
+.language-switch { display: flex; align-items: center; gap: 4px; }
+.language-switch__button { min-width: 32px; height: 32px; border: 1px solid transparent; border-radius: 4px; padding: 0 6px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 500; line-height: 1; }
+.language-switch__button:hover { color: var(--ink); background: var(--surface-subtle); }
+.language-switch__button--active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-wash); }
 
 .game-layout { position: relative; z-index: 1; display: grid; flex: 1; align-content: start; justify-items: center; width: min(100%, 680px); margin: clamp(40px, 7vh, 80px) auto 40px; }
 .game-layout__eyebrow { margin: 0 0 32px; }

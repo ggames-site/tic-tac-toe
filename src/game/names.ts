@@ -5,21 +5,32 @@ export interface SavedPreferences {
 }
 
 const STORAGE_KEY = 'ggames-tic-tac-toe-preferences'
-const FIRST_PARTS = ['Ловкий', 'Смелый', 'Точный', 'Быстрый', 'Тихий', 'Яркий', 'Мудрый', 'Северный']
-const SECOND_PARTS = ['Лис', 'Маяк', 'Стриж', 'Клён', 'Ветер', 'Комета', 'Сокол', 'Кедр']
+type NameLanguage = 'ru' | 'en'
+
+const NAME_PARTS: Record<NameLanguage, { first: readonly string[]; second: readonly string[] }> = {
+  ru: {
+    first: ['Ловкий', 'Смелый', 'Точный', 'Быстрый', 'Тихий', 'Яркий', 'Мудрый', 'Северный'],
+    second: ['Лис', 'Маяк', 'Стриж', 'Клён', 'Ветер', 'Комета', 'Сокол', 'Кедр'],
+  },
+  en: {
+    first: ['Swift', 'Brave', 'Keen', 'Quick', 'Quiet', 'Bright', 'Wise', 'Northern'],
+    second: ['Fox', 'Beacon', 'Swift', 'Maple', 'Wind', 'Comet', 'Falcon', 'Cedar'],
+  },
+}
 
 function choose<T>(values: readonly T[]): T {
   return values[Math.floor(Math.random() * values.length)] as T
 }
 
-export function createRandomName(): string {
-  return `${choose(FIRST_PARTS)} ${choose(SECOND_PARTS)}`
+export function createRandomName(language: NameLanguage = 'ru'): string {
+  const parts = NAME_PARTS[language]
+  return `${choose(parts.first)} ${choose(parts.second)}`
 }
 
-export function getPreferences(): SavedPreferences {
+export function getPreferences(language: NameLanguage = 'ru'): SavedPreferences {
   const fallback: SavedPreferences = {
-    playerXName: createRandomName(),
-    playerOName: createRandomName(),
+    playerXName: createRandomName(language),
+    playerOName: createRandomName(language),
     difficulty: 'medium',
   }
 

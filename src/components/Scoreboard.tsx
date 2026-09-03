@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import type { Score } from '../game/types'
 
 interface AnimatedNumberProps {
@@ -33,16 +34,18 @@ interface ScoreboardProps {
 }
 
 export function Scoreboard({ score, completedRounds, length }: ScoreboardProps) {
+  const { t } = useTranslation()
+
   return (
-    <section className="scoreboard" aria-label="Счёт матча">
+    <section className="scoreboard" aria-label={t('score.match')}>
       <div className="scoreboard__middle">
-        <small>ничьи: {score.draws}</small>
-        <div className="scoreboard__score" aria-label={`Счёт: ${score.X} – ${score.O}`}>
+        <small>{t('score.draws', { count: score.draws })}</small>
+        <div className="scoreboard__score" aria-label={t('score.aria', { x: score.X, o: score.O })}>
           <AnimatedNumber value={score.X} className="scoreboard__number--large" />
           <span className="scoreboard__dash" aria-hidden="true">–</span>
           <AnimatedNumber value={score.O} className="scoreboard__number--large" />
         </div>
-        <span className="scoreboard__round">{length === null ? 'Без лимита' : `Партия ${Math.min(completedRounds + 1, length)} из ${length}`}</span>
+        <span className="scoreboard__round">{length === null ? t('score.unlimited') : t('score.progress', { current: Math.min(completedRounds + 1, length), total: length })}</span>
       </div>
     </section>
   )

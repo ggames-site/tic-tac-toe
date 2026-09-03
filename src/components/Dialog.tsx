@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useEffect, useRef } from 'react'
-import type { PropsWithChildren, ReactNode } from 'react'
+import type { MouseEvent, PropsWithChildren, ReactNode } from 'react'
 
 interface DialogProps extends PropsWithChildren {
   isOpen: boolean
@@ -36,7 +36,7 @@ export function Dialog({ isOpen, title, description, actions, children, onClose 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: reducedMotion ? 0 : 0.18 }}
-          onMouseDown={(event) => {
+          onMouseDown={(event: MouseEvent<HTMLDivElement>) => {
             if (event.target === event.currentTarget) onClose?.()
           }}
         >

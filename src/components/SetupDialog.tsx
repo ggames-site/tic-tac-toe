@@ -1,4 +1,5 @@
 import { Dialog } from './Dialog'
+import { useTranslation } from 'react-i18next'
 import type { Difficulty, GameMode } from '../game/types'
 
 export type SetupStep = 'mode' | 'difficulty' | 'length' | null
@@ -12,26 +13,24 @@ interface SetupDialogProps {
   onLengthSelect: (length: number | null) => void
 }
 
-const difficulties: Array<{ value: Difficulty; title: string; description: string }> = [
-  { value: 'easy', title: 'Легко', description: 'Бот выбирает свободные клетки случайно.' },
-  { value: 'medium', title: 'Средне', description: 'Бот замечает прямые победы и угрозы.' },
-  { value: 'hard', title: 'Сложно', description: 'Бот играет оптимально и не ошибается.' },
-]
+const difficulties: readonly Difficulty[] = ['easy', 'medium', 'hard']
 
 export function SetupDialog({ step, mode, difficulty, onModeSelect, onDifficultySelect, onLengthSelect }: SetupDialogProps) {
+  const { t } = useTranslation()
+
   if (step === 'mode') {
     return (
-      <Dialog isOpen title="Выберите формат" description="С кем сыграем первую партию?">
+      <Dialog isOpen title={t('setup.modeTitle')} description={t('setup.modeDescription')}>
         <div className="choice-grid">
           <button type="button" className="choice-card" onClick={() => onModeSelect('solo')}>
             <span className="choice-card__number">01</span>
-            <strong>Для одного</strong>
-            <small>Сразитесь с Бот-Мастером.</small>
+            <strong>{t('setup.soloTitle')}</strong>
+            <small>{t('setup.soloDescription')}</small>
           </button>
           <button type="button" className="choice-card" onClick={() => onModeSelect('duo')}>
             <span className="choice-card__number">02</span>
-            <strong>Для двоих</strong>
-            <small>Ходите по очереди на одной доске.</small>
+            <strong>{t('setup.duoTitle')}</strong>
+            <small>{t('setup.duoDescription')}</small>
           </button>
         </div>
       </Dialog>
@@ -40,18 +39,18 @@ export function SetupDialog({ step, mode, difficulty, onModeSelect, onDifficulty
 
   if (step === 'difficulty') {
     return (
-      <Dialog isOpen title="Уровень Бот-Мастера" description="Его можно будет изменить в настройках.">
+      <Dialog isOpen title={t('setup.difficultyTitle')} description={t('setup.difficultyDescription')}>
         <div className="option-list">
-          {difficulties.map((item) => (
+          {difficulties.map((value) => (
             <button
               type="button"
-              key={item.value}
-              className={`option-row ${difficulty === item.value ? 'option-row--selected' : ''}`}
-              onClick={() => onDifficultySelect(item.value)}
+              key={value}
+              className={`option-row ${difficulty === value ? 'option-row--selected' : ''}`}
+              onClick={() => onDifficultySelect(value)}
             >
               <span>
-                <strong>{item.title}</strong>
-                <small>{item.description}</small>
+                <strong>{t(`difficulty.${value}.title`)}</strong>
+                <small>{t(`difficulty.${value}.description`)}</small>
               </span>
               <svg className="option-row__chevron" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="m6 3 5 5-5 5" />
@@ -66,20 +65,20 @@ export function SetupDialog({ step, mode, difficulty, onModeSelect, onDifficulty
   return (
     <Dialog
       isOpen={step === 'length'}
-      title="Длина матча"
-      description={mode === 'solo' ? 'Проверьте себя против Бот-Мастера.' : 'Выберите число партий для матча.'}
+      title={t('setup.lengthTitle')}
+      description={mode === 'solo' ? t('setup.soloLengthDescription') : t('setup.duoLengthDescription')}
     >
       <div className="choice-grid choice-grid--length">
         <button type="button" className="choice-card choice-card--featured" onClick={() => onLengthSelect(null)}>
           <span className="choice-card__number">∞</span>
-          <strong>Бесконечно</strong>
-          <small>Новая партия начнётся автоматически.</small>
+          <strong>{t('setup.infiniteTitle')}</strong>
+          <small>{t('setup.infiniteDescription')}</small>
         </button>
         {[3, 5, 7].map((length) => (
           <button type="button" key={length} className="choice-card" onClick={() => onLengthSelect(length)}>
             <span className="choice-card__number">{length}</span>
-            <strong>{length} партий</strong>
-            <small>До финального результата.</small>
+            <strong>{t('setup.roundsTitle', { count: length })}</strong>
+            <small>{t('setup.roundsDescription')}</small>
           </button>
         ))}
       </div>

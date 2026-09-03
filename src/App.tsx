@@ -1,14 +1,17 @@
 import { lazy, Suspense, useEffect, useReducer } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GameBoard } from './components/GameBoard'
 import { PlayerPanel } from './components/PlayerPanel'
 import { Scoreboard } from './components/Scoreboard'
 import { SeriesResultDialog } from './components/SeriesResultDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { SetupDialog } from './components/SetupDialog'
+import { LanguageSwitcher } from './components/LanguageSwitcher'
 import { chooseBotMove } from './game/bot'
 import { getPreferences, savePreferences } from './game/names'
 import { getRoundResult, placeMark } from './game/rules'
 import { EMPTY_BOARD } from './game/types'
+import i18n from './i18n'
 import type { Board, Difficulty, GameMode, Mark, MatchConfig, Player, RoundResult, Score } from './game/types'
 import type { SetupStep } from './components/SetupDialog'
 
@@ -47,7 +50,7 @@ type Action =
   | { type: 'RESET_MATCH' }
 
 function createInitialState(): GameState {
-  const preferences = getPreferences()
+  const preferences = getPreferences(i18n.resolvedLanguage === 'en' ? 'en' : 'ru')
 
   return {
     board: EMPTY_BOARD,
@@ -164,13 +167,14 @@ function SettingsIcon() {
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState)
+  const { t } = useTranslation()
   const isSoloBotTurn = state.config?.mode === 'solo' && state.currentMark === 'O' && state.outcome.kind === 'playing'
   const isRoundFinished = state.outcome.kind !== 'playing'
   const isSeriesFinished = state.config?.length !== null && state.config !== null && state.completedRounds >= state.config.length
   const xPlayer: Player = { id: 'x', name: state.playerXName, mark: 'X', isBot: false }
   const oPlayer: Player = {
     id: 'o',
-    name: state.config?.mode === 'solo' ? 'Бот-Мастер' : state.playerOName,
+    name: state.config?.mode === 'solo' ? t('game.botName') : state.playerOName,
     mark: 'O',
     isBot: state.config?.mode === 'solo',
   }
@@ -210,18 +214,21 @@ export default function App() {
       </Suspense>
       <header className="site-header">
         <div className="site-header__top">
-          <a className="brand" href="/" aria-label="GGames — Tic-Tac-Toe, на главную">
+          <a className="brand" href="/" aria-label={t('header.home')}>
             <img className="brand__icon" src="/favicon-64.png" width="32" height="32" alt="" aria-hidden="true" />
-            <span>GGames — Tic-Tac-Toe</span>
+            <span>{t('header.brand')}</span>
           </a>
-          <button type="button" className="icon-button" aria-label="Открыть настройки" onClick={() => dispatch({ type: 'OPEN_SETTINGS' })}>
-            <SettingsIcon />
-          </button>
+          <div className="header-actions">
+            <LanguageSwitcher />
+            <button type="button" className="icon-button" aria-label={t('header.settings')} onClick={() => dispatch({ type: 'OPEN_SETTINGS' })}>
+              <SettingsIcon />
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="game-layout">
-        <p className="eyebrow game-layout__eyebrow">Классическая игра 3 × 3</p>
+        <p className="eyebrow game-layout__eyebrow">{t('game.eyebrow')}</p>
         <div className="match-summary">
           <PlayerPanel player={xPlayer} isCurrent={state.currentMark === 'X' && !isRoundFinished} />
           <Scoreboard
@@ -239,14 +246,20 @@ export default function App() {
           onSelect={(index) => dispatch({ type: 'PLAY', index })}
         />
         <p className="game-hint">
-          {state.config === null ? 'Настройте матч, чтобы начать.' : isRoundFinished ? 'Результат зафиксирован.' : isSoloBotTurn ? 'Бот-Мастер обдумывает ход…' : `Ходит ${state.currentMark === 'X' ? xPlayer.name : oPlayer.name}.`}
+          {state.config === null
+            ? t('game.configure')
+            : isRoundFinished
+              ? t('game.resultRecorded')
+              : isSoloBotTurn
+                ? t('game.botThinking')
+                : t('game.turn', { name: state.currentMark === 'X' ? xPlayer.name : oPlayer.name })}
         </p>
       </main>
 
       <footer className="site-footer">
         <span>© 2026 GGames</span>
-        <a href="https://ru.wikipedia.org/wiki/%D0%9A%D1%80%D0%B5%D1%81%D1%82%D0%B8%D0%BA%D0%B8-%D0%BD%D0%BE%D0%BB%D0%B8%D0%BA%D0%B8" target="_blank" rel="noreferrer">
-          Подробнее об игре читайте на Википедии <span aria-hidden="true">↗</span>
+        <a href={t('footer.wikipediaUrl')} target="_blank" rel="noreferrer">
+          {t('footer.learnMore')} <span aria-hidden="true">↗</span>
         </a>
       </footer>
 

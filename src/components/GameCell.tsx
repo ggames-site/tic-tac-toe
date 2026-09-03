@@ -1,4 +1,5 @@
 import { MarkIcon } from './MarkIcon'
+import { useTranslation } from 'react-i18next'
 import type { Cell } from '../game/types'
 
 interface GameCellProps {
@@ -10,7 +11,10 @@ interface GameCellProps {
 }
 
 export function GameCell({ index, value, isWinning, disabled, onSelect }: GameCellProps) {
-  const label = value === null ? `Поставить знак в клетку ${index + 1}` : `Клетка ${index + 1}: ${value}`
+  const { t } = useTranslation()
+  const label = value === null
+    ? t('game.emptyCell', { index: index + 1 })
+    : t('game.filledCell', { index: index + 1, mark: value })
 
   return (
     <button
