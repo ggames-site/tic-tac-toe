@@ -59,7 +59,10 @@ download_release_image() {
   curl -fsSL --retry 3 --retry-delay 2 --output "${image_archive}" "${image_url}"
   curl -fsSL --retry 3 --retry-delay 2 --output "${checksums_file}" "${checksums_url}"
 
-  if ! grep -F "  ${asset_name}" "${checksums_file}" | sha256sum --check --status -; then
+  if ! (
+    cd "${temporary_directory}"
+    grep -F "  ${asset_name}" "${checksums_file}" | sha256sum --check --status -
+  ); then
     fail "The downloaded image archive did not match its SHA-256 checksum."
   fi
 
