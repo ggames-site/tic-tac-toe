@@ -1,25 +1,34 @@
 # GGames — Крестики-нолики
 
-Классическая игра «Крестики-нолики» на React, TypeScript и Vite с русской и английской локализацией.
+Классическая игра «Крестики-нолики» на React Router SSR, TypeScript и Vite с русской и английской локализацией.
 
 ## Локальная разработка
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm dev
+npm ci
+npm run dev
 ```
 
 Проверки и production-сборка:
 
 ```bash
-pnpm test
-pnpm lint
-pnpm build
+npm test
+npm run lint
+npm run typecheck
+npm run build
 ```
+
+Проверить production SSR-сервер локально:
+
+```bash
+npm start
+```
+
+Сервер по умолчанию слушает порт `3000`. Доступны API-маршруты `GET /api/healthcheck` и `POST /api/stats/save`.
 
 ## Docker
 
-Production-образ собирает статические файлы Vite и отдаёт их через Nginx на порту `80`.
+Production-образ запускает React Router SSR-сервер на порту `80`.
 
 ```bash
 docker build -t ggames-tic-tac-toe:local .
