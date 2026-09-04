@@ -39,10 +39,12 @@ docker run --rm -p 8080:80 ggames-tic-tac-toe:local
 
 ## Публикация образа
 
-Workflow [Build and publish Docker image](./.github/workflows/docker-publish.yml) запускается при отправке Git-тега или вручную из **Actions**. Он собирает образы для `linux/amd64` и `linux/arm64`, публикуя их в GitHub Container Registry:
+Workflow [Build and publish Docker image](./.github/workflows/docker-publish.yml) запускается при отправке Git-тега или вручную из **Actions**. Он собирает образы для `linux/amd64` и `linux/arm64` и прикрепляет Docker-архивы и файл `SHA256SUMS` к GitHub Release:
 
 ```text
-ghcr.io/ggames-site/tic-tac-toe
+ggames-tic-tac-toe-linux-amd64.tar.gz
+ggames-tic-tac-toe-linux-arm64.tar.gz
+SHA256SUMS
 ```
 
 Для релиза создайте и отправьте тег после того, как workflow уже попадёт в основную ветку:
@@ -52,11 +54,11 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-Будут опубликованы теги версии, сокращённые semver-теги и `latest`. Дополнительные secrets не нужны: workflow использует встроенный `GITHUB_TOKEN`. Чтобы сервер мог скачивать образ без авторизации, сделайте GHCR-пакет публичным в настройках пакета GitHub.
+Для тега будет создан или обновлён GitHub Release. Дополнительные secrets не нужны: workflow использует встроенный `GITHUB_TOKEN` с разрешением `contents: write`.
 
 ## Развёртывание на Ubuntu
 
-Скрипт [scripts/deploy.sh](./scripts/deploy.sh) установит Docker Engine при необходимости, скачает `ghcr.io/ggames-site/tic-tac-toe:latest` и запустит контейнер с политикой перезапуска `unless-stopped`.
+Скрипт [scripts/deploy.sh](./scripts/deploy.sh) установит Docker Engine при необходимости, скачает архив образа для архитектуры сервера из последнего GitHub Release, проверит его SHA-256 и запустит контейнер с политикой перезапуска `unless-stopped`.
 
 Из клонированного репозитория:
 
@@ -72,11 +74,11 @@ curl -fsSL https://raw.githubusercontent.com/ggames-site/tic-tac-toe/main/script
 
 При первом запуске можно выбрать адрес привязки и внешний порт; по умолчанию используются `0.0.0.0` и `8080`. Для reverse proxy укажите адрес `127.0.0.1`. При повторном запуске скрипт сохранит текущие сетевые настройки контейнера и обновит образ.
 
-Если GHCR-пакет приватный, создайте GitHub Personal Access Token с правом `read:packages` и передайте его скрипту:
+По умолчанию скрипт использует последний GitHub Release. Чтобы развернуть конкретный релиз, укажите его Git-тег:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ggames-site/tic-tac-toe/main/scripts/deploy.sh | \
-  sudo env GHCR_TOKEN=YOUR_GITHUB_TOKEN bash
+  sudo env RELEASE_TAG=v1.0.0 bash
 ```
 
 ## Управление контейнером

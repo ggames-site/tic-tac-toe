@@ -2,8 +2,8 @@
 
 set -Eeuo pipefail
 
-readonly IMAGE="ghcr.io/ggames-site/tic-tac-toe"
-readonly TAG="latest"
+readonly IMAGE="ggames-tic-tac-toe:latest"
+readonly GITHUB_REPOSITORY="ggames-site/tic-tac-toe"
 readonly CONTAINER_NAME="ggames-tic-tac-toe"
 readonly CONTAINER_PORT="80"
 readonly DEFAULT_BIND_ADDRESS="0.0.0.0"
@@ -20,6 +20,51 @@ fail() {
 
 docker_installed() {
   command -v docker >/dev/null 2>&1
+}
+
+detect_architecture() {
+  case "$(uname -m)" in
+    x86_64|amd64)
+      printf 'amd64\n'
+      ;;
+    aarch64|arm64)
+      printf 'arm64\n'
+      ;;
+    *)
+      fail "Unsupported CPU architecture: $(uname -m)."
+      ;;
+  esac
+}
+
+download_release_image() {
+  local architecture asset_name checksums_url image_url temporary_directory image_archive checksums_file
+
+  architecture="$(detect_architecture)"
+  asset_name="${CONTAINER_NAME}-linux-${architecture}.tar.gz"
+  temporary_directory="$(mktemp -d)"
+  image_archive="${temporary_directory}/${asset_name}"
+  checksums_file="${temporary_directory}/SHA256SUMS"
+
+  if [[ -n "${RELEASE_TAG:-}" ]]; then
+    image_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${asset_name}"
+    checksums_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/SHA256SUMS"
+  else
+    image_url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${asset_name}"
+    checksums_url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/SHA256SUMS"
+  fi
+
+  trap 'rm -rf "${temporary_directory}"' RETURN
+
+  log "Downloading ${asset_name} from GitHub Releases"
+  curl -fsSL --retry 3 --retry-delay 2 --output "${image_archive}" "${image_url}"
+  curl -fsSL --retry 3 --retry-delay 2 --output "${checksums_file}" "${checksums_url}"
+
+  if ! grep -F "  ${asset_name}" "${checksums_file}" | sha256sum --check --status -; then
+    fail "The downloaded image archive did not match its SHA-256 checksum."
+  fi
+
+  log "Loading ${IMAGE} into Docker"
+  docker load --input "${image_archive}" >/dev/null
 }
 
 read_existing_network_settings() {
@@ -113,15 +158,7 @@ if [[ ! "${HOST_PORT}" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )
   fail "Port must be an integer between 1 and 65535."
 fi
 
-if [[ -n "${GHCR_TOKEN:-}" ]]; then
-  log "Authenticating with GitHub Container Registry"
-  printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io --username "ggames-site" --password-stdin
-fi
-
-full_image="${IMAGE}:${TAG}"
-
-log "Pulling ${full_image}"
-docker pull "${full_image}"
+download_release_image
 
 if [[ "${container_exists}" == true ]]; then
   log "Replacing the existing container"
@@ -133,7 +170,7 @@ docker run --detach \
   --name "${CONTAINER_NAME}" \
   --restart unless-stopped \
   --publish "${BIND_ADDRESS}:${HOST_PORT}:${CONTAINER_PORT}" \
-  "${full_image}" >/dev/null
+  "${IMAGE}" >/dev/null
 
 log "Waiting for the container health check"
 for _ in {1..30}; do
