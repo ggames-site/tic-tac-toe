@@ -2,10 +2,9 @@
 
 set -Eeuo pipefail
 
-readonly IMAGE="ggames-tic-tac-toe:latest"
-readonly GITHUB_REPOSITORY="ggames-site/tic-tac-toe"
+readonly IMAGE="ghcr.io/ggames-site/tic-tac-toe"
+readonly TAG="latest"
 readonly CONTAINER_NAME="ggames-tic-tac-toe"
-readonly CONTAINER_PORT="80"
 readonly DEFAULT_BIND_ADDRESS="0.0.0.0"
 readonly DEFAULT_HOST_PORT="8080"
 
@@ -18,56 +17,10 @@ fail() {
   exit 1
 }
 
-docker_installed() {
-  command -v docker >/dev/null 2>&1
-}
-
-detect_architecture() {
-  case "$(uname -m)" in
-    x86_64|amd64)
-      printf 'amd64\n'
-      ;;
-    aarch64|arm64)
-      printf 'arm64\n'
-      ;;
-    *)
-      fail "Unsupported CPU architecture: $(uname -m)."
-      ;;
-  esac
-}
-
-download_release_image() {
-  local architecture asset_name checksums_url image_url temporary_directory image_archive checksums_file
-
-  architecture="$(detect_architecture)"
-  asset_name="${CONTAINER_NAME}-linux-${architecture}.tar.gz"
-  temporary_directory="$(mktemp -d)"
-  image_archive="${temporary_directory}/${asset_name}"
-  checksums_file="${temporary_directory}/SHA256SUMS"
-
-  if [[ -n "${RELEASE_TAG:-}" ]]; then
-    image_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${asset_name}"
-    checksums_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/SHA256SUMS"
-  else
-    image_url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${asset_name}"
-    checksums_url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/SHA256SUMS"
-  fi
-
-  trap 'rm -rf "${temporary_directory}"' RETURN
-
-  log "Downloading ${asset_name} from GitHub Releases"
-  curl -fsSL --retry 3 --retry-delay 2 --output "${image_archive}" "${image_url}"
-  curl -fsSL --retry 3 --retry-delay 2 --output "${checksums_file}" "${checksums_url}"
-
-  if ! (
-    cd "${temporary_directory}"
-    grep -F "  ${asset_name}" "${checksums_file}" | sha256sum --check --status -
-  ); then
-    fail "The downloaded image archive did not match its SHA-256 checksum."
-  fi
-
-  log "Loading ${IMAGE} into Docker"
-  docker load --input "${image_archive}" >/dev/null
+docker_dependencies_installed() {
+  command -v docker >/dev/null 2>&1 \
+    && docker buildx version >/dev/null 2>&1 \
+    && docker compose version >/dev/null 2>&1
 }
 
 read_existing_network_settings() {
@@ -76,11 +29,64 @@ read_existing_network_settings() {
   published_port="$(docker inspect --format '{{with index .HostConfig.PortBindings "80/tcp"}}{{with index . 0}}{{.HostIp}}|{{.HostPort}}{{end}}{{end}}' "${CONTAINER_NAME}")"
 
   if [[ -z "${published_port}" || "${published_port}" != *"|"* ]]; then
-    fail "Existing ${CONTAINER_NAME} container does not publish port ${CONTAINER_PORT}."
+    fail "Existing ${CONTAINER_NAME} container does not publish port 80; unable to preserve its network settings."
   fi
 
   IFS='|' read -r BIND_ADDRESS HOST_PORT <<< "${published_port}"
   BIND_ADDRESS="${BIND_ADDRESS:-${DEFAULT_BIND_ADDRESS}}"
+
+  if [[ ! "${HOST_PORT}" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )); then
+    fail "Existing ${CONTAINER_NAME} container has an invalid published port."
+  fi
+}
+
+print_summary() {
+  local public_address="${BIND_ADDRESS}"
+  local access_url
+  local green=""
+  local cyan=""
+  local bold=""
+  local reset=""
+
+  if [[ "${BIND_ADDRESS}" == "0.0.0.0" ]]; then
+    public_address="<server-ip>"
+  fi
+
+  access_url="http://${public_address}:${HOST_PORT}"
+
+  if [[ -t 1 ]]; then
+    green=$'\033[32m'
+    cyan=$'\033[36m'
+    bold=$'\033[1m'
+    reset=$'\033[0m'
+  fi
+
+  printf '\n'
+  printf '%s\n' "${green}+------------------------------------------------------------+${reset}"
+  printf '%s\n' "${green}|            GGames Tic-Tac-Toe is ready to use              |${reset}"
+  printf '%s\n' "${green}+------------------------------------------------------------+${reset}"
+  printf '\n'
+  printf '  %s%-18s%s %s\n' "${bold}" "Status:" "${reset}" "${green}healthy${reset}"
+  printf '  %s%-18s%s %s\n' "${bold}" "Application URL:" "${reset}" "${cyan}${access_url}${reset}"
+  printf '  %s%-18s%s %s\n' "${bold}" "Bind address:" "${reset}" "${BIND_ADDRESS}"
+  printf '  %s%-18s%s %s\n' "${bold}" "External port:" "${reset}" "${HOST_PORT}"
+  printf '  %s%-18s%s %s\n' "${bold}" "Container:" "${reset}" "${CONTAINER_NAME}"
+  printf '  %s%-18s%s %s\n' "${bold}" "Docker image:" "${reset}" "${FULL_IMAGE}"
+  printf '  %s%-18s%s %s\n' "${bold}" "Restart policy:" "${reset}" "unless-stopped"
+  printf '\n'
+  printf '  %sUseful commands%s\n' "${bold}" "${reset}"
+  printf '  %-18s %s\n' "View status:" "sudo docker ps --filter name=${CONTAINER_NAME}"
+  printf '  %-18s %s\n' "Follow logs:" "sudo docker logs -f ${CONTAINER_NAME}"
+  printf '  %-18s %s\n' "Restart:" "sudo docker restart ${CONTAINER_NAME}"
+  printf '  %-18s %s\n' "Stop:" "sudo docker stop ${CONTAINER_NAME}"
+  printf '  %-18s %s\n' "Update:" "sudo bash scripts/deploy.sh"
+  printf '\n'
+
+  if [[ "${BIND_ADDRESS}" == "0.0.0.0" ]]; then
+    printf '  %sNote:%s Replace <server-ip> with the public IP address or domain name.\n' \
+      "${cyan}" "${reset}"
+    printf '\n'
+  fi
 }
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -104,67 +110,89 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-if ! docker_installed; then
-  log "Installing Docker Engine"
+if docker_dependencies_installed; then
+  log "Docker, Buildx, and Compose are already installed; skipping package installation"
+else
+  log "Installing Docker and required plugins"
   apt-get update
   apt-get install -y --no-install-recommends ca-certificates curl
 
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    -o /etc/apt/keyrings/docker.asc
   chmod a+r /etc/apt/keyrings/docker.asc
 
-  architecture="$(dpkg --print-architecture)"
-  ubuntu_suite="${UBUNTU_CODENAME:-${VERSION_CODENAME}}"
+  ARCHITECTURE="$(dpkg --print-architecture)"
+  UBUNTU_SUITE="${UBUNTU_CODENAME:-${VERSION_CODENAME}}"
   printf '%s\n' \
     "Types: deb" \
     "URIs: https://download.docker.com/linux/ubuntu" \
-    "Suites: ${ubuntu_suite}" \
+    "Suites: ${UBUNTU_SUITE}" \
     "Components: stable" \
-    "Architectures: ${architecture}" \
+    "Architectures: ${ARCHITECTURE}" \
     "Signed-By: /etc/apt/keyrings/docker.asc" \
     > /etc/apt/sources.list.d/docker.sources
 
   apt-get update
-  apt-get install -y docker-ce docker-ce-cli containerd.io
+  apt-get install -y \
+    docker-ce \
+    docker-ce-cli \
+    containerd.io \
+    docker-buildx-plugin \
+    docker-compose-plugin
 fi
 
-if ! docker_installed; then
-  fail "Docker is unavailable after installation."
+if ! docker_dependencies_installed; then
+  fail "Docker or one of the required CLI plugins is unavailable after installation."
 fi
 
-systemctl enable --now docker
+if systemctl list-unit-files --type=service --no-legend \
+  | grep -q '^docker\.service'; then
+  systemctl enable --now docker
+fi
 
 if ! docker info >/dev/null 2>&1; then
   fail "Docker is installed, but the Docker daemon is not available."
 fi
 
 if docker container inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
-  log "Existing container found; preserving its network settings"
+  log "Existing ${CONTAINER_NAME} container found; preserving its network settings"
   read_existing_network_settings
-  container_exists=true
+  CONTAINER_EXISTS=true
 else
-  container_exists=false
+  CONTAINER_EXISTS=false
 
   if [[ -t 0 ]]; then
     read -r -p "Bind address [${DEFAULT_BIND_ADDRESS}]: " BIND_ADDRESS
     read -r -p "External port [${DEFAULT_HOST_PORT}]: " HOST_PORT
   else
+    log "No interactive terminal detected, using default network settings"
     BIND_ADDRESS=""
     HOST_PORT=""
   fi
 
   BIND_ADDRESS="${BIND_ADDRESS:-${DEFAULT_BIND_ADDRESS}}"
   HOST_PORT="${HOST_PORT:-${DEFAULT_HOST_PORT}}"
+
+  if [[ ! "${HOST_PORT}" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )); then
+    fail "Port must be an integer between 1 and 65535."
+  fi
 fi
 
-if [[ ! "${HOST_PORT}" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )); then
-  fail "Port must be an integer between 1 and 65535."
+if [[ -n "${GHCR_TOKEN:-}" ]]; then
+  log "Authenticating with GitHub Container Registry"
+  printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io \
+    --username "ggames-site" \
+    --password-stdin
 fi
 
-download_release_image
+FULL_IMAGE="${IMAGE}:${TAG}"
 
-if [[ "${container_exists}" == true ]]; then
-  log "Replacing the existing container"
+log "Pulling ${FULL_IMAGE}"
+docker pull "${FULL_IMAGE}"
+
+if [[ "${CONTAINER_EXISTS}" == true ]]; then
+  log "Replacing the existing ${CONTAINER_NAME} container"
   docker rm --force "${CONTAINER_NAME}" >/dev/null
 fi
 
@@ -172,23 +200,24 @@ log "Starting ${CONTAINER_NAME}"
 docker run --detach \
   --name "${CONTAINER_NAME}" \
   --restart unless-stopped \
-  --publish "${BIND_ADDRESS}:${HOST_PORT}:${CONTAINER_PORT}" \
-  "${IMAGE}" >/dev/null
+  --publish "${BIND_ADDRESS}:${HOST_PORT}:80" \
+  --env NODE_ENV=production \
+  "${FULL_IMAGE}" >/dev/null
 
 log "Waiting for the container health check"
 for _ in {1..30}; do
-  status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${CONTAINER_NAME}")"
+  STATUS="$(docker inspect \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    "${CONTAINER_NAME}")"
 
-  if [[ "${status}" == "healthy" ]]; then
-    public_address="${BIND_ADDRESS}"
-    [[ "${public_address}" == "0.0.0.0" ]] && public_address="<server-ip>"
-    log "Ready: http://${public_address}:${HOST_PORT}"
+  if [[ "${STATUS}" == "healthy" ]]; then
+    print_summary
     exit 0
   fi
 
-  if [[ "${status}" == "unhealthy" || "${status}" == "exited" || "${status}" == "dead" ]]; then
+  if [[ "${STATUS}" == "unhealthy" || "${STATUS}" == "exited" || "${STATUS}" == "dead" ]]; then
     docker logs --tail 100 "${CONTAINER_NAME}" >&2 || true
-    fail "Container entered the ${status} state."
+    fail "Container entered the ${STATUS} state."
   fi
 
   sleep 2
